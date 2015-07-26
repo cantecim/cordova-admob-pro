@@ -15,6 +15,10 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 
 import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
@@ -119,7 +123,7 @@ public class AdMobPlugin extends GenericAdPlugin {
         	ad.loadAd(new PublisherAdRequest.Builder().build());
 		} else {
 			AdView ad = (AdView) view;
-        	ad.loadAd( buildAdRequest() );
+        	ad.loadAd(buildAdRequest());
 		}
 	}
 	
@@ -200,7 +204,7 @@ public class AdMobPlugin extends GenericAdPlugin {
 		
 		if(interstitial instanceof InterstitialAd) {
 			InterstitialAd ad = (InterstitialAd) interstitial;
-			ad.loadAd( buildAdRequest() );
+			ad.loadAd(buildAdRequest());
 		}
 	}
 	
@@ -223,6 +227,123 @@ public class AdMobPlugin extends GenericAdPlugin {
 		if(interstitial instanceof InterstitialAd) {
 			InterstitialAd ad = (InterstitialAd) interstitial;
 			ad.setAdListener(null);
+		}
+	}
+
+	@Override
+	public void showBanner(final int argPos, final int argX, final int argY) {
+		Log.d("GenericAdPlugin", "showBanner");
+		if(this.adView == null) {
+			Log.e("GenericAdPlugin", "banner is null, call createBanner() first.");
+		} else {
+			final Activity activity = this.getActivity();
+			activity.runOnUiThread(new Runnable() {
+				public void run() {
+					View mainView = AdMobPlugin.this.getView();
+					ViewGroup adParent = (ViewGroup) AdMobPlugin.this.adView.getParent();
+					if (adParent != null) {
+						adParent.removeView(AdMobPlugin.this.adView);
+					}
+
+					int bw = AdMobPlugin.this.__getAdViewWidth(AdMobPlugin.this.adView);
+					int bh = AdMobPlugin.this.__getAdViewHeight(AdMobPlugin.this.adView);
+					ViewGroup rootView = (ViewGroup) mainView.getRootView();
+					int rw = rootView.getWidth();
+					int rh = rootView.getHeight();
+					Log.w("GenericAdPlugin", "show banner, overlap:" + AdMobPlugin.this.overlap + ", position: " + argPos);
+					if (AdMobPlugin.this.overlap) {
+						int v = AdMobPlugin.this.posX;
+						int parentView = AdMobPlugin.this.posY;
+						int ww = mainView.getWidth();
+						int wh = mainView.getHeight();
+						if (argPos >= 1 && argPos <= 9) {
+							switch ((argPos - 1) % 3) {
+								case 0:
+									v = 0;
+									break;
+								case 1:
+									v = (ww - bw) / 2;
+									break;
+								case 2:
+									v = ww - bw;
+							}
+
+							switch ((argPos - 1) / 3) {
+								case 0:
+									parentView = 0;
+									break;
+								case 1:
+									parentView = (wh - bh) / 2;
+									break;
+								case 2:
+									parentView = wh - bh;
+							}
+						} else if (argPos == 10) {
+							v = argX;
+							parentView = argY;
+						}
+
+						int[] offsetRootView = new int[2];
+						int[] offsetWebView = new int[2];
+						rootView.getLocationOnScreen(offsetRootView);
+						mainView.getLocationOnScreen(offsetWebView);
+						v += offsetWebView[0] - offsetRootView[0];
+						parentView += offsetWebView[1] - offsetRootView[1];
+						android.widget.RelativeLayout.LayoutParams params = new android.widget.RelativeLayout.LayoutParams(bw, bh);
+						params.leftMargin = v;
+						params.topMargin = parentView;
+
+                        float scale = AdMobPlugin.this.getActivity().getApplicationContext().getResources().getDisplayMetrics().density;
+                        params.leftMargin = Math.round(argX * scale) + offsetWebView[0] + offsetRootView[0];
+                        params.topMargin = Math.round(argY * scale) + offsetWebView[1] + offsetWebView[0];
+						if (AdMobPlugin.this.overlapLayout == null) {
+							AdMobPlugin.this.overlapLayout = new RelativeLayout(activity);
+							rootView.addView(AdMobPlugin.this.overlapLayout, new android.widget.RelativeLayout.LayoutParams(-1, -1));
+							AdMobPlugin.this.overlapLayout.bringToFront();
+						} else {
+							AdMobPlugin.this.overlapLayout.bringToFront();
+						}
+                        Log.d(LOGTAG, "Ad X : " + params.leftMargin);
+                        Log.d(LOGTAG, "Ad Y : " + params.topMargin);
+                        Log.d(LOGTAG, "Ad W : " + params.width);
+                        Log.d(LOGTAG, "Ad H : " + params.height);
+
+						AdMobPlugin.this.overlapLayout.addView(AdMobPlugin.this.adView, params);
+					} else {
+						FrameLayout v1 = new FrameLayout(AdMobPlugin.this.getActivity());
+						v1.addView(AdMobPlugin.this.adView, new android.widget.FrameLayout.LayoutParams(-2, -2));
+						if (!AdMobPlugin.this.isWebViewInLinearLayout) {
+							if (AdMobPlugin.this.originalParent == null) {
+								AdMobPlugin.this.originalParent = (ViewGroup) mainView.getParent();
+								AdMobPlugin.this.originalLayoutParams = mainView.getLayoutParams();
+							}
+
+							if (AdMobPlugin.this.splitLayout == null) {
+								AdMobPlugin.this.splitLayout = new LinearLayout(activity);
+								AdMobPlugin.this.splitLayout.setOrientation(LinearLayout.VERTICAL);
+								AdMobPlugin.this.originalParent.addView(AdMobPlugin.this.splitLayout, new android.widget.FrameLayout.LayoutParams(-1, -1));
+								AdMobPlugin.this.splitLayout.bringToFront();
+							}
+
+							AdMobPlugin.this.splitLayout.removeAllViews();
+							AdMobPlugin.this.originalParent.removeView(mainView);
+							AdMobPlugin.this.splitLayout.addView(mainView, new android.widget.LinearLayout.LayoutParams(-1, AdMobPlugin.this.originalParent.getHeight() - bh));
+						}
+
+						ViewGroup parentView1 = (ViewGroup) mainView.getParent();
+						if (argPos <= 3) {
+							parentView1.addView(v1, 0);
+						} else {
+							parentView1.addView(v1);
+						}
+					}
+
+					AdMobPlugin.this.adView.setVisibility(View.VISIBLE);
+					AdMobPlugin.this.adView.bringToFront();
+					AdMobPlugin.this.__resumeAdView(AdMobPlugin.this.adView);
+					AdMobPlugin.this.bannerVisible = true;
+				}
+			});
 		}
 	}
 
