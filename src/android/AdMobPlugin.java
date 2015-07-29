@@ -4,6 +4,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Random;
 
+import org.apache.cordova.CallbackContext;
+import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -32,6 +34,8 @@ import com.rjfun.cordova.ad.GenericAdPlugin;
 
 public class AdMobPlugin extends GenericAdPlugin {
     private static final String LOGTAG = "AdMobPlugin";
+
+	protected boolean autoShowBanner = true;
     
     // options
     private static final String OPT_ADCOLONY = "AdColony";
@@ -231,6 +235,72 @@ public class AdMobPlugin extends GenericAdPlugin {
 	}
 
 	@Override
+	public boolean execute(String action, JSONArray inputs, CallbackContext callbackContext) throws JSONException {
+		PluginResult result = null;
+		JSONObject options;
+		if("setOptions".equals(action)) {
+			options = inputs.optJSONObject(0);
+			this.setOptions(options);
+			result = new PluginResult(PluginResult.Status.OK);
+		} else {
+			String adId;
+			boolean autoShow;
+			boolean isOk;
+			if("createBanner".equals(action)) {
+				options = inputs.optJSONObject(0);
+				if(options.length() > 1) {
+					this.setOptions(options);
+				}
+
+				adId = options.optString("adId");
+				autoShow = options.has("autoShow")?options.optBoolean("autoShow"):true;
+				isOk = this.createBanner(adId, autoShow);
+				result = new PluginResult(isOk? PluginResult.Status.OK: PluginResult.Status.ERROR);
+			} else if("removeBanner".equals(action)) {
+				this.removeBanner();
+				result = new PluginResult(PluginResult.Status.OK);
+			} else if("hideBanner".equals(action)) {
+				this.hideBanner();
+				result = new PluginResult(PluginResult.Status.OK);
+			} else if("showBanner".equals(action)) {
+				int options1 = inputs.optInt(0);
+				this.showBanner(options1, 0, 0);
+				result = new PluginResult(PluginResult.Status.OK);
+			} else if("showBannerAtXY".equals(action)) {
+				options = inputs.optJSONObject(0);
+				int argX = options.optInt("x");
+				int argY = options.optInt("y");
+				AdMobPlugin.this.posX = argX;
+				AdMobPlugin.this.posY = argY;
+				this.showBanner(10, argX, argY);
+				result = new PluginResult(PluginResult.Status.OK);
+			} else if("prepareInterstitial".equals(action)) {
+				options = inputs.optJSONObject(0);
+				if(options.length() > 1) {
+					this.setOptions(options);
+				}
+
+				adId = options.optString("adId");
+				autoShow = options.has("autoShow")?options.optBoolean("autoShow"):false;
+				isOk = this.prepareInterstitial(adId, autoShow);
+				result = new PluginResult(isOk? PluginResult.Status.OK: PluginResult.Status.ERROR);
+			} else if("showInterstitial".equals(action)) {
+				this.showInterstitial();
+				result = new PluginResult(PluginResult.Status.OK);
+			} else {
+				Log.w("GenericAdPlugin", String.format("Invalid action passed: %s", new Object[]{action}));
+				result = new PluginResult(PluginResult.Status.INVALID_ACTION);
+			}
+		}
+
+		if(result != null) {
+			this.sendPluginResult(result, callbackContext);
+		}
+
+		return true;
+	}
+
+	@Override
 	public void showBanner(final int argPos, final int argX, final int argY) {
 		Log.d("GenericAdPlugin", "showBanner");
 		if(this.adView == null) {
@@ -239,6 +309,8 @@ public class AdMobPlugin extends GenericAdPlugin {
 			final Activity activity = this.getActivity();
 			activity.runOnUiThread(new Runnable() {
 				public void run() {
+                    //AdMobPlugin.this.posX = argX;
+                    //AdMobPlugin.this.posY = argY;
 					View mainView = AdMobPlugin.this.getView();
 					ViewGroup adParent = (ViewGroup) AdMobPlugin.this.adView.getParent();
 					if (adParent != null) {
